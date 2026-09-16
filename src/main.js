@@ -1,0 +1,133 @@
+const canvas = document.querySelector("#gameCanvas");
+const gl = canvas.getContext("webgl2");
+
+if (!gl) {
+    throw new Error("WebGL2 não está disponível neste navegador.");
+}
+
+async function loadShaderSource(path) {
+    const response = await fetch(path);
+
+    if (!response.ok) {
+        throw new Error(`Não foi possível carregar o shader: ${path}`);
+    }
+
+    return response.text();
+}
+
+function createShader(type, source) {
+    const shader = gl.createShader(type);
+    gl.shaderSource(shader, source);
+    gl.compileShader(shader);
+
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        const message = gl.getShaderInfoLog(shader);
+        gl.deleteShader(shader);
+        throw new Error(`Erro ao compilar shader: ${message}`);
+    }
+
+    return shader;
+}
+
+function createProgram(vertexSource, fragmentSource) {
+    const vertexShader = createShader(gl.VERTEX_SHADER, vertexSource);
+    const fragmentShader = createShader(gl.FRAGMENT_SHADER, fragmentSource);
+    const program = gl.createProgram();
+
+    gl.attachShader(program, vertexShader);
+    gl.attachShader(program, fragmentShader);
+    gl.linkProgram(program);
+
+    gl.deleteShader(vertexShader);
+    gl.deleteShader(fragmentShader);
+
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        const message = gl.getProgramInfoLog(program);
+        gl.deleteProgram(program);
+        throw new Error(`Erro ao criar programa WebGL: ${message}`);
+    }
+
+    return program;
+}
+
+const [vertexSource, fragmentSource] = await Promise.all([
+    loadShaderSource("shaders/sprite.vert"),
+    loadShaderSource("shaders/sprite.frag"),
+]);
+
+const program = createProgram(vertexSource, fragmentSource);
+const positionLocation = gl.getAttribLocation(program, "a_position");
+const resolutionLocation = gl.getUniformLocation(program, "u_resolution");
+const spritePositionLocation = gl.getUniformLocation(program, "u_position");
+const spriteSizeLocation = gl.getUniformLocation(program, "u_size");
+const colorLocation = gl.getUniformLocation(program, "u_color");
+const useTextureLocation = gl.getUniformLocation(program, "u_useTexture");
+
+const vertices = new Float32Array([
+    0, 0,
+    1, 0,
+    0, 1,
+    0, 1,
+    1, 0,
+    1, 1,
+]);
+
+const vertexBuffer = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+
+gl.useProgram(program);
+gl.enableVertexAttribArray(positionLocation);
+gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+gl.uniform2f(resolutionLocation, canvas.width, canvas.height);
+
+function loadTexture(path) {
+    return new Promise((resolve, reject) => {
+        const image = new Image();
+
+        image.addEventListener("load", () => {
+            const texture = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texImage2D(
+                gl.TEXTURE_2D,
+                0,
+                gl.RGBA,
+                gl.RGBA,
+                gl.UNSIGNED_BYTE,
+                image,
+            );
+            resolve(texture);
+        });
+
+        image.addEventListener("error", () => {
+            reject(new Error(`Não foi possível carregar a imagem: ${path}`));
+        });
+
+        image.src = path;
+    });
+}
+
+function drawSprite(x, y, width, height, color, texture = null) {
+    gl.uniform2f(spritePositionLocation, x, y);
+    gl.uniform2f(spriteSizeLocation, width, height);
+    gl.uniform4fv(colorLocation, color);
+    gl.uniform1i(useTextureLocation, texture !== null);
+
+    if (texture) {
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+    }
+
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+}
+
+const backgroundTexture = await loadTexture("assets/images/background.png");
+
+gl.viewport(0, 0, canvas.width, canvas.height);
+gl.clearColor(0.79, 0.55, 0.29, 1.0);
+gl.clear(gl.COLOR_BUFFER_BIT);
+
+drawSprite(0, 0, canvas.width, canvas.height, [1, 1, 1, 1], backgroundTexture);
