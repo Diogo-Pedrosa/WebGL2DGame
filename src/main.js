@@ -60,8 +60,10 @@ const positionLocation = gl.getAttribLocation(program, "a_position");
 const resolutionLocation = gl.getUniformLocation(program, "u_resolution");
 const spritePositionLocation = gl.getUniformLocation(program, "u_position");
 const spriteSizeLocation = gl.getUniformLocation(program, "u_size");
+const rotationLocation = gl.getUniformLocation(program, "u_rotation");
 const colorLocation = gl.getUniformLocation(program, "u_color");
 const useTextureLocation = gl.getUniformLocation(program, "u_useTexture");
+const isCircleLocation = gl.getUniformLocation(program, "u_isCircle");
 
 const vertices = new Float32Array([
     0, 0,
@@ -111,17 +113,83 @@ function loadTexture(path) {
     });
 }
 
-function drawSprite(x, y, width, height, color, texture = null) {
+function drawSprite(
+    x,
+    y,
+    width,
+    height,
+    color,
+    texture = null,
+    rotation = 0,
+    isCircle = false,
+) {
     gl.uniform2f(spritePositionLocation, x, y);
     gl.uniform2f(spriteSizeLocation, width, height);
+    gl.uniform1f(rotationLocation, rotation);
     gl.uniform4fv(colorLocation, color);
     gl.uniform1i(useTextureLocation, texture !== null);
+    gl.uniform1i(isCircleLocation, isCircle);
 
     if (texture) {
         gl.bindTexture(gl.TEXTURE_2D, texture);
     }
 
     gl.drawArrays(gl.TRIANGLES, 0, 6);
+}
+
+const pathWaypoints = [
+    { x: -30, y: 270 },
+    { x: 990, y: 270 },
+];
+
+function drawPathSegment(start, end, width, color) {
+    const deltaX = end.x - start.x;
+    const deltaY = end.y - start.y;
+    const length = Math.hypot(deltaX, deltaY);
+    const angle = Math.atan2(deltaY, deltaX);
+    const centerX = (start.x + end.x) / 2;
+    const centerY = (start.y + end.y) / 2;
+
+    drawSprite(
+        centerX - length / 2,
+        centerY - width / 2,
+        length,
+        width,
+        color,
+        null,
+        angle,
+    );
+}
+
+function drawPathJoint(point, width, color) {
+    drawSprite(
+        point.x - width / 2,
+        point.y - width / 2,
+        width,
+        width,
+        color,
+        null,
+        0,
+        true,
+    );
+}
+
+function drawPathLayer(waypoints, width, color) {
+    for (let index = 0; index < waypoints.length - 1; index += 1) {
+        drawPathSegment(waypoints[index], waypoints[index + 1], width, color);
+    }
+
+    for (const waypoint of waypoints) {
+        drawPathJoint(waypoint, width, color);
+    }
+}
+
+function drawPath(waypoints) {
+    const borderColor = [0.29, 0.16, 0.08, 1];
+    const dirtColor = [0.68, 0.43, 0.2, 1];
+
+    drawPathLayer(waypoints, 82, borderColor);
+    drawPathLayer(waypoints, 66, dirtColor);
 }
 
 const backgroundTexture = await loadTexture("assets/images/background.png");
@@ -131,3 +199,4 @@ gl.clearColor(0.79, 0.55, 0.29, 1.0);
 gl.clear(gl.COLOR_BUFFER_BIT);
 
 drawSprite(0, 0, canvas.width, canvas.height, [1, 1, 1, 1], backgroundTexture);
+drawPath(pathWaypoints);
