@@ -138,8 +138,16 @@ function drawSprite(
 }
 
 const pathWaypoints = [
-    { x: -30, y: 270 },
-    { x: 990, y: 270 },
+    { x: -30, y: 330 },
+    { x: 260, y: 330 },
+    { x: 260, y: 140 },
+    { x: 570, y: 140 },
+    { x: 570, y: 300 },
+    { x: 400, y: 300 },
+    { x: 400, y: 470 },
+    { x: 790, y: 470 },
+    { x: 790, y: 240 },
+    { x: 990, y: 240 },
 ];
 
 function drawPathSegment(start, end, width, color) {
