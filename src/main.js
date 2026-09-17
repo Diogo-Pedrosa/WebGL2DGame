@@ -200,11 +200,70 @@ function drawPath(waypoints) {
     drawPathLayer(waypoints, 66, dirtColor);
 }
 
-const backgroundTexture = await loadTexture("assets/images/background.png");
+const [backgroundTexture, banditTexture] = await Promise.all([
+    loadTexture("assets/images/background.png"),
+    loadTexture("assets/images/bandit.png"),
+]);
+
+const bandit = {
+    x: pathWaypoints[0].x,
+    y: pathWaypoints[0].y,
+    width: 68,
+    height: 105,
+    speed: 70,
+    nextWaypoint: 1,
+};
+
+function updateBandit(deltaTime) {
+    let movement = bandit.speed * deltaTime;
+
+    while (movement > 0 && bandit.nextWaypoint < pathWaypoints.length) {
+        const target = pathWaypoints[bandit.nextWaypoint];
+        const deltaX = target.x - bandit.x;
+        const deltaY = target.y - bandit.y;
+        const distance = Math.hypot(deltaX, deltaY);
+
+        if (movement >= distance) {
+            bandit.x = target.x;
+            bandit.y = target.y;
+            bandit.nextWaypoint += 1;
+            movement -= distance;
+        } else {
+            bandit.x += (deltaX / distance) * movement;
+            bandit.y += (deltaY / distance) * movement;
+            movement = 0;
+        }
+    }
+}
 
 gl.viewport(0, 0, canvas.width, canvas.height);
+gl.enable(gl.BLEND);
+gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 gl.clearColor(0.79, 0.55, 0.29, 1.0);
-gl.clear(gl.COLOR_BUFFER_BIT);
 
-drawSprite(0, 0, canvas.width, canvas.height, [1, 1, 1, 1], backgroundTexture);
-drawPath(pathWaypoints);
+let previousTime = null;
+
+function gameLoop(currentTime) {
+    const deltaTime = previousTime === null
+        ? 0
+        : Math.min((currentTime - previousTime) / 1000, 0.1);
+    previousTime = currentTime;
+
+    updateBandit(deltaTime);
+
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    drawSprite(0, 0, canvas.width, canvas.height, [1, 1, 1, 1], backgroundTexture);
+    drawPath(pathWaypoints);
+    drawSprite(
+        bandit.x - bandit.width / 2,
+        bandit.y - bandit.height,
+        bandit.width,
+        bandit.height,
+        [1, 1, 1, 1],
+        banditTexture,
+    );
+
+    requestAnimationFrame(gameLoop);
+}
+
+requestAnimationFrame(gameLoop);
