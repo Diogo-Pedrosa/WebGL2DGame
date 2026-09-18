@@ -1,3 +1,10 @@
+import { PlacementTile } from "./PlacementTile.js";
+import {
+    placementTilesData,
+    placementTileSize,
+    placementGridOffsetY,
+} from "./placementTilesData.js";
+
 const canvas = document.querySelector("#gameCanvas");
 const gl = canvas.getContext("webgl2");
 
@@ -150,6 +157,58 @@ const pathWaypoints = [
     { x: 990, y: 240 },
 ];
 
+const buildSlots = [];
+
+placementTilesData.forEach((row, rowIndex) => {
+    row.forEach((value, columnIndex) => {
+        if (value === 1) {
+            buildSlots.push(new PlacementTile(
+                columnIndex * placementTileSize,
+                rowIndex * placementTileSize + placementGridOffsetY,
+                placementTileSize,
+            ));
+        }
+    });
+});
+
+let selectedBuildSlot = null;
+let hoveredBuildSlot = null;
+
+function getBuildSlotAtPointer(event) {
+    const bounds = canvas.getBoundingClientRect();
+    const x = (event.clientX - bounds.left - canvas.clientLeft)
+        * canvas.width / canvas.clientWidth;
+    const y = (event.clientY - bounds.top - canvas.clientTop)
+        * canvas.height / canvas.clientHeight;
+
+    return buildSlots.find((slot) => slot.containsPoint(x, y)) ?? null;
+}
+
+canvas.addEventListener("click", (event) => {
+    const slot = getBuildSlotAtPointer(event);
+    selectedBuildSlot = slot && !slot.occupied ? slot : null;
+    document.querySelector("#buildStatus").textContent = selectedBuildSlot
+        ? "Posição selecionada para colocar um xerife."
+        : "Clique em um quadrado vazio para selecionar uma posição para o xerife.";
+});
+
+canvas.addEventListener("mousemove", (event) => {
+    const slot = getBuildSlotAtPointer(event);
+    hoveredBuildSlot = slot && !slot.occupied ? slot : null;
+    canvas.style.cursor = hoveredBuildSlot ? "pointer" : "default";
+});
+
+canvas.addEventListener("mouseleave", () => {
+    canvas.style.cursor = "default";
+    hoveredBuildSlot = null;
+});
+
+function drawBuildSlots() {
+    for (const slot of buildSlots) {
+        slot.draw(drawSprite, slot === hoveredBuildSlot, slot === selectedBuildSlot);
+    }
+}
+
 function drawPathSegment(start, end, width, color) {
     const deltaX = end.x - start.x;
     const deltaY = end.y - start.y;
@@ -254,6 +313,7 @@ function gameLoop(currentTime) {
     gl.clear(gl.COLOR_BUFFER_BIT);
     drawSprite(0, 0, canvas.width, canvas.height, [1, 1, 1, 1], backgroundTexture);
     drawPath(pathWaypoints);
+    drawBuildSlots();
     drawSprite(
         bandit.x - bandit.width / 2,
         bandit.y - bandit.height,
