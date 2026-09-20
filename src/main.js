@@ -174,6 +174,7 @@ placementTilesData.forEach((row, rowIndex) => {
 let selectedBuildSlot = null;
 let hoveredBuildSlot = null;
 const sheriffs = [];
+const projectiles = [];
 
 function createSheriff(slot) {
     return {
@@ -289,16 +290,26 @@ const [backgroundTexture, banditTexture, sheriffTexture] = await Promise.all([
     loadTexture("assets/images/sheriff.png"),
 ]);
 
-const bandit = {
-    x: pathWaypoints[0].x,
-    y: pathWaypoints[0].y,
-    width: 68,
-    height: 105,
-    speed: 70,
-    nextWaypoint: 1,
-};
+const bandits = [];
+const banditSpawnInterval = 2.5;
+let banditSpawnTimer = banditSpawnInterval;
 
-function updateBandit(deltaTime) {
+function createBandit() {
+    return {
+        x: pathWaypoints[0].x,
+        y: pathWaypoints[0].y,
+        width: 68,
+        height: 105,
+        speed: 70,
+        nextWaypoint: 1,
+        health: 100,
+        maxHealth: 100,
+        alive: true,
+        finished: false,
+    };
+}
+
+function updateBandit(bandit, deltaTime) {
     let movement = bandit.speed * deltaTime;
 
     while (movement > 0 && bandit.nextWaypoint < pathWaypoints.length) {
@@ -318,6 +329,161 @@ function updateBandit(deltaTime) {
             movement = 0;
         }
     }
+
+    if (bandit.nextWaypoint >= pathWaypoints.length) {
+        bandit.finished = true;
+    }
+}
+
+function updateBandits(deltaTime) {
+    banditSpawnTimer += deltaTime;
+
+    while (banditSpawnTimer >= banditSpawnInterval) {
+        bandits.push(createBandit());
+        banditSpawnTimer -= banditSpawnInterval;
+    }
+
+    for (let index = bandits.length - 1; index >= 0; index -= 1) {
+        const bandit = bandits[index];
+
+        if (bandit.alive) {
+            updateBandit(bandit, deltaTime);
+        }
+
+        if (!bandit.alive || bandit.finished) {
+            bandits.splice(index, 1);
+        }
+    }
+}
+
+function drawBanditHealthBar(bandit) {
+    const barWidth = 60;
+    const barHeight = 7;
+    const healthPercentage = Math.max(0, bandit.health / bandit.maxHealth);
+    const x = bandit.x - barWidth / 2;
+    const y = bandit.y - bandit.height - 12;
+
+    drawSprite(x, y, barWidth, barHeight, [0.25, 0.05, 0.05, 1]);
+    drawSprite(x, y, barWidth * healthPercentage, barHeight, [0.1, 0.8, 0.2, 1]);
+}
+
+function drawBandits() {
+    for (const bandit of bandits) {
+        if (!bandit.alive) {
+            continue;
+        }
+
+        drawSprite(
+            bandit.x - bandit.width / 2,
+            bandit.y - bandit.height,
+            bandit.width,
+            bandit.height,
+            [1, 1, 1, 1],
+            banditTexture,
+        );
+        drawBanditHealthBar(bandit);
+    }
+}
+
+function getBanditCenter(bandit) {
+    return {
+        x: bandit.x,
+        y: bandit.y - bandit.height / 2,
+    };
+}
+
+function findClosestBandit(sheriff) {
+    let closestBandit = null;
+    let closestDistance = sheriff.range;
+
+    for (const bandit of bandits) {
+        if (!bandit.alive || bandit.finished) {
+            continue;
+        }
+
+        const center = getBanditCenter(bandit);
+        const distance = Math.hypot(center.x - sheriff.x, center.y - sheriff.y);
+
+        if (distance <= closestDistance) {
+            closestBandit = bandit;
+            closestDistance = distance;
+        }
+    }
+
+    return closestBandit;
+}
+
+function createProjectile(sheriff, target) {
+    projectiles.push({
+        x: sheriff.x,
+        y: sheriff.y - sheriff.height / 2,
+        size: 9,
+        speed: 300,
+        damage: sheriff.damage,
+        target,
+    });
+}
+
+function updateSheriffs(deltaTime) {
+    for (const sheriff of sheriffs) {
+        sheriff.timeSinceLastShot += deltaTime;
+        const target = findClosestBandit(sheriff);
+        const shootingInterval = 1 / sheriff.fireRate;
+
+        if (target && sheriff.timeSinceLastShot >= shootingInterval) {
+            createProjectile(sheriff, target);
+            sheriff.timeSinceLastShot = 0;
+        }
+    }
+}
+
+function updateProjectiles(deltaTime) {
+    for (let index = projectiles.length - 1; index >= 0; index -= 1) {
+        const projectile = projectiles[index];
+        const target = projectile.target;
+
+        if (!target.alive || target.finished) {
+            projectiles.splice(index, 1);
+            continue;
+        }
+
+        const targetCenter = getBanditCenter(target);
+        const deltaX = targetCenter.x - projectile.x;
+        const deltaY = targetCenter.y - projectile.y;
+        const distance = Math.hypot(deltaX, deltaY);
+        const movement = projectile.speed * deltaTime;
+        const targetRadius = Math.min(target.width, target.height) * 0.25;
+
+        if (distance <= movement + targetRadius) {
+            target.health -= projectile.damage;
+            projectiles.splice(index, 1);
+
+            if (target.health <= 0) {
+                target.health = 0;
+                target.alive = false;
+            }
+
+            continue;
+        }
+
+        projectile.x += (deltaX / distance) * movement;
+        projectile.y += (deltaY / distance) * movement;
+    }
+}
+
+function drawProjectiles() {
+    for (const projectile of projectiles) {
+        drawSprite(
+            projectile.x - projectile.size / 2,
+            projectile.y - projectile.size / 2,
+            projectile.size,
+            projectile.size,
+            [1, 0.78, 0.15, 1],
+            null,
+            0,
+            true,
+        );
+    }
 }
 
 gl.viewport(0, 0, canvas.width, canvas.height);
@@ -333,7 +499,9 @@ function gameLoop(currentTime) {
         : Math.min((currentTime - previousTime) / 1000, 0.1);
     previousTime = currentTime;
 
-    updateBandit(deltaTime);
+    updateBandits(deltaTime);
+    updateSheriffs(deltaTime);
+    updateProjectiles(deltaTime);
 
     gl.clear(gl.COLOR_BUFFER_BIT);
     drawSprite(0, 0, canvas.width, canvas.height, [1, 1, 1, 1], backgroundTexture);
@@ -351,14 +519,8 @@ function gameLoop(currentTime) {
         );
     }
 
-    drawSprite(
-        bandit.x - bandit.width / 2,
-        bandit.y - bandit.height,
-        bandit.width,
-        bandit.height,
-        [1, 1, 1, 1],
-        banditTexture,
-    );
+    drawProjectiles();
+    drawBandits();
 
     requestAnimationFrame(gameLoop);
 }
