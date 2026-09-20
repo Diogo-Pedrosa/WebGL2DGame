@@ -173,6 +173,20 @@ placementTilesData.forEach((row, rowIndex) => {
 
 let selectedBuildSlot = null;
 let hoveredBuildSlot = null;
+const sheriffs = [];
+
+function createSheriff(slot) {
+    return {
+        x: slot.x + slot.size / 2,
+        y: slot.y + slot.size,
+        width: 48,
+        height: 74,
+        range: 180,
+        damage: 20,
+        fireRate: 1,
+        timeSinceLastShot: 0,
+    };
+}
 
 function getBuildSlotAtPointer(event) {
     const bounds = canvas.getBoundingClientRect();
@@ -186,10 +200,20 @@ function getBuildSlotAtPointer(event) {
 
 canvas.addEventListener("click", (event) => {
     const slot = getBuildSlotAtPointer(event);
-    selectedBuildSlot = slot && !slot.occupied ? slot : null;
-    document.querySelector("#buildStatus").textContent = selectedBuildSlot
-        ? "Posição selecionada para colocar um xerife."
-        : "Clique em um quadrado vazio para selecionar uma posição para o xerife.";
+
+    if (!slot || slot.occupied) {
+        selectedBuildSlot = null;
+        document.querySelector("#buildStatus").textContent = slot?.occupied
+            ? "Esta posição já está ocupada."
+            : "Clique em um quadrado vazio para posicionar um xerife.";
+        return;
+    }
+
+    const sheriff = createSheriff(slot);
+    slot.occupant = sheriff;
+    sheriffs.push(sheriff);
+    selectedBuildSlot = slot;
+    document.querySelector("#buildStatus").textContent = "Xerife posicionado.";
 });
 
 canvas.addEventListener("mousemove", (event) => {
@@ -259,9 +283,10 @@ function drawPath(waypoints) {
     drawPathLayer(waypoints, 66, dirtColor);
 }
 
-const [backgroundTexture, banditTexture] = await Promise.all([
+const [backgroundTexture, banditTexture, sheriffTexture] = await Promise.all([
     loadTexture("assets/images/background.png"),
     loadTexture("assets/images/bandit.png"),
+    loadTexture("assets/images/sheriff.png"),
 ]);
 
 const bandit = {
@@ -314,6 +339,18 @@ function gameLoop(currentTime) {
     drawSprite(0, 0, canvas.width, canvas.height, [1, 1, 1, 1], backgroundTexture);
     drawPath(pathWaypoints);
     drawBuildSlots();
+
+    for (const sheriff of sheriffs) {
+        drawSprite(
+            sheriff.x - sheriff.width / 2,
+            sheriff.y - sheriff.height,
+            sheriff.width,
+            sheriff.height,
+            [1, 1, 1, 1],
+            sheriffTexture,
+        );
+    }
+
     drawSprite(
         bandit.x - bandit.width / 2,
         bandit.y - bandit.height,
