@@ -16,6 +16,48 @@ let playerHealth = 100;
 const playerMaxHealth = 100;
 let isGameOver = false;
 
+let coins = 10;
+const deputyCost = 2;
+const sheriffUpgradeCost = 3;
+const banditReward = 1;
+
+let coinsTextTexture = null;
+let coinsTextWidth = 0;
+let coinsTextHeight = 0;
+
+function updateCoinsUI() {
+    const tempCanvas = document.createElement('canvas');
+    const ctx = tempCanvas.getContext('2d');
+    const text = `Moedas: ${coins}`;
+    ctx.font = "bold 28px Arial";
+    tempCanvas.width = ctx.measureText(text).width + 8;
+    tempCanvas.height = 36;
+
+    ctx.font = "bold 28px Arial";
+    ctx.fillStyle = "#ffd700"; // gold color
+    ctx.textBaseline = "top";
+    ctx.shadowColor = "black";
+    ctx.shadowBlur = 3;
+    ctx.shadowOffsetX = 2;
+    ctx.shadowOffsetY = 2;
+    ctx.fillText(text, 4, 4);
+
+    if (coinsTextTexture) {
+        gl.deleteTexture(coinsTextTexture);
+    }
+
+    coinsTextTexture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, coinsTextTexture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, tempCanvas);
+
+    coinsTextWidth = tempCanvas.width;
+    coinsTextHeight = tempCanvas.height;
+}
+
 let playerTextTexture = null;
 let playerTextWidth = 0;
 let playerTextHeight = 0;
@@ -247,17 +289,25 @@ let hoveredBuildSlot = null;
 const sheriffs = [];
 const projectiles = [];
 
-function createSheriff(slot) {
+function createDeputy(slot) {
     return {
+        type: 'deputy',
         x: slot.x + slot.size / 2,
         y: slot.y + slot.size,
         width: 48,
         height: 74,
-        range: 180,
-        damage: 20,
-        fireRate: 1,
+        range: 250,
+        damage: 13,
+        fireRate: 0.8,
         timeSinceLastShot: 0,
     };
+}
+
+function upgradeToSheriff(tower) {
+    tower.type = 'sheriff';
+    tower.range = 250;
+    tower.damage = 13;
+    tower.fireRate = 1.4;
 }
 
 function getBuildSlotAtPointer(event) {
@@ -274,20 +324,44 @@ canvas.addEventListener("click", (event) => {
     if (isGameOver) return;
 
     const slot = getBuildSlotAtPointer(event);
+    const statusText = document.querySelector("#buildStatus");
 
-    if (!slot || slot.occupied) {
+    if (!slot) {
         selectedBuildSlot = null;
-        document.querySelector("#buildStatus").textContent = slot?.occupied
-            ? "Esta posição já está ocupada."
-            : "Clique em um quadrado vazio para posicionar um xerife.";
+        statusText.textContent = "Clique em um quadrado vazio para posicionar um Deputy (Custo: 2). Clique num Deputy para evoluir (Custo: 3).";
         return;
     }
 
-    const sheriff = createSheriff(slot);
-    slot.occupant = sheriff;
-    sheriffs.push(sheriff);
-    selectedBuildSlot = slot;
-    document.querySelector("#buildStatus").textContent = "Xerife posicionado.";
+    if (slot.occupied) {
+        selectedBuildSlot = slot;
+        const tower = slot.occupant;
+        if (tower.type === 'deputy') {
+            if (coins >= sheriffUpgradeCost) {
+                coins -= sheriffUpgradeCost;
+                updateCoinsUI();
+                upgradeToSheriff(tower);
+                statusText.textContent = "Evoluído para Sheriff!";
+            } else {
+                statusText.textContent = "Moedas insuficientes para evoluir (Custo: 3).";
+            }
+        } else {
+            statusText.textContent = "Sheriff já está no nível máximo.";
+        }
+        return;
+    }
+
+    if (coins >= deputyCost) {
+        coins -= deputyCost;
+        updateCoinsUI();
+        const deputy = createDeputy(slot);
+        slot.occupant = deputy;
+        sheriffs.push(deputy);
+        selectedBuildSlot = slot;
+        statusText.textContent = "Deputy posicionado.";
+    } else {
+        selectedBuildSlot = null;
+        statusText.textContent = "Moedas insuficientes para posicionar Deputy (Custo: 2).";
+    }
 });
 
 canvas.addEventListener("mousemove", (event) => {
@@ -357,15 +431,18 @@ function drawPath(waypoints) {
     drawPathLayer(waypoints, 66, dirtColor);
 }
 
-const [backgroundTexture, banditTexture, sheriffTexture] = await Promise.all([
+const [backgroundTexture, banditTexture, sheriffTexture, deputyTexture] = await Promise.all([
     loadTexture("assets/images/background.png"),
     loadTexture("assets/images/bandit.png"),
     loadTexture("assets/images/sheriff.png"),
+    loadTexture("assets/images/deputy.png"),
 ]);
 
 const bandits = [];
-const banditSpawnInterval = 2.5;
+let banditSpawnInterval = 2.5;
 let banditSpawnTimer = banditSpawnInterval;
+let banditBaseHealth = 100;
+let difficultyTimer = 0;
 
 function createBandit() {
     return {
@@ -375,8 +452,8 @@ function createBandit() {
         height: 105,
         speed: 70,
         nextWaypoint: 1,
-        health: 100,
-        maxHealth: 100,
+        health: banditBaseHealth,
+        maxHealth: banditBaseHealth,
         alive: true,
         finished: false,
     };
@@ -409,6 +486,13 @@ function updateBandit(bandit, deltaTime) {
 }
 
 function updateBandits(deltaTime) {
+    difficultyTimer += deltaTime;
+    while (difficultyTimer >= 5) {
+        difficultyTimer -= 5;
+        banditSpawnInterval = Math.max(1.5, banditSpawnInterval - 0.1);
+        banditBaseHealth = Math.min(200, banditBaseHealth + 10);
+    }
+
     banditSpawnTimer += deltaTime;
 
     while (banditSpawnTimer >= banditSpawnInterval) {
@@ -542,6 +626,8 @@ function updateProjectiles(deltaTime) {
             if (target.health <= 0) {
                 target.health = 0;
                 target.alive = false;
+                coins += banditReward;
+                updateCoinsUI();
             }
 
             continue;
@@ -592,13 +678,14 @@ function gameLoop(currentTime) {
     drawBuildSlots();
 
     for (const sheriff of sheriffs) {
+        const tex = sheriff.type === 'sheriff' ? sheriffTexture : deputyTexture;
         drawSprite(
             sheriff.x - sheriff.width / 2,
             sheriff.y - sheriff.height,
             sheriff.width,
             sheriff.height,
             [1, 1, 1, 1],
-            sheriffTexture,
+            tex,
         );
     }
 
@@ -606,15 +693,25 @@ function gameLoop(currentTime) {
     drawBandits();
     drawPlayerHealthBar();
 
+    if (coinsTextTexture) {
+        drawSprite(20, 20, coinsTextWidth, coinsTextHeight, [1, 1, 1, 1], coinsTextTexture);
+    }
+
     requestAnimationFrame(gameLoop);
 }
 
 function resetGame() {
     playerHealth = playerMaxHealth;
     isGameOver = false;
+    coins = 10;
+    updateCoinsUI();
     bandits.length = 0;
     projectiles.length = 0;
     sheriffs.length = 0;
+    banditSpawnInterval = 2.5;
+    banditBaseHealth = 100;
+    difficultyTimer = 0;
+    banditSpawnTimer = banditSpawnInterval;
 
     for (const slot of buildSlots) {
         slot.occupant = null;
@@ -623,10 +720,11 @@ function resetGame() {
     selectedBuildSlot = null;
     hoveredBuildSlot = null;
     document.querySelector("#gameOverScreen").style.display = "none";
-    document.querySelector("#buildStatus").textContent = "Clique em um quadrado vazio para posicionar um xerife.";
+    document.querySelector("#buildStatus").textContent = "Clique em um quadrado vazio para posicionar um Deputy (Custo: 2). Clique num Deputy para evoluir (Custo: 3).";
 }
 
 document.querySelector("#restartButton").addEventListener("click", resetGame);
 
 initPlayerTextTexture();
+updateCoinsUI();
 requestAnimationFrame(gameLoop);
