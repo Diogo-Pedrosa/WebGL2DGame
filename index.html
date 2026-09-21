@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WebGL 2D Game</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=2">
 </head>
+
 <body>
     <main>
         <h1>WebGL 2D Game</h1>
@@ -13,8 +15,14 @@
             Seu navegador não oferece suporte ao elemento canvas.
         </canvas>
         <p id="buildStatus" aria-live="polite">Clique em um quadrado vazio para posicionar um xerife.</p>
+        
+        <div id="gameOverScreen" style="display: none;">
+            <h2>Game Over</h2>
+            <button id="restartButton">Recomeçar</button>
+        </div>
     </main>
 
-    <script type="module" src="src/main.js?v=2"></script>
+    <script type="module" src="src/main.js?v=5"></script>
 </body>
+
 </html>

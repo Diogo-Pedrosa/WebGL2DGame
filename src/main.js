@@ -12,6 +12,77 @@ if (!gl) {
     throw new Error("WebGL2 não está disponível neste navegador.");
 }
 
+let playerHealth = 100;
+const playerMaxHealth = 100;
+let isGameOver = false;
+
+let playerTextTexture = null;
+let playerTextWidth = 0;
+let playerTextHeight = 0;
+
+function initPlayerTextTexture() {
+    const tempCanvas = document.createElement('canvas');
+    const ctx = tempCanvas.getContext('2d');
+    const text = "Player";
+    ctx.font = "bold 20px Arial";
+    tempCanvas.width = ctx.measureText(text).width + 8;
+    tempCanvas.height = 24;
+
+    ctx.font = "bold 20px Arial";
+    ctx.fillStyle = "white";
+    ctx.textBaseline = "top";
+    ctx.shadowColor = "black";
+    ctx.shadowBlur = 2;
+    ctx.shadowOffsetX = 1;
+    ctx.shadowOffsetY = 1;
+    ctx.fillText(text, 2, 2);
+
+    playerTextTexture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, playerTextTexture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, tempCanvas);
+
+    playerTextWidth = tempCanvas.width;
+    playerTextHeight = tempCanvas.height;
+}
+
+function drawPlayerHealthBar() {
+    const barWidth = 150;
+    const barHeight = 20;
+    const padding = 15;
+    const gap = 10;
+    const startX = canvas.width - barWidth - padding;
+    const startY = padding;
+
+    if (playerTextTexture) {
+        drawSprite(startX - playerTextWidth - gap, startY, playerTextWidth, playerTextHeight, [1, 1, 1, 1], playerTextTexture);
+    }
+
+    const borderThickness = 3;
+    const borderColor = [0.55, 0.35, 0.17, 1];
+    drawSprite(startX - borderThickness, startY - borderThickness, barWidth + borderThickness * 2, borderThickness, borderColor);
+    drawSprite(startX - borderThickness, startY + barHeight, barWidth + borderThickness * 2, borderThickness, borderColor);
+    drawSprite(startX - borderThickness, startY, borderThickness, barHeight, borderColor);
+    drawSprite(startX + barWidth, startY, borderThickness, barHeight, borderColor);
+
+    drawSprite(startX, startY, barWidth, barHeight, [0.33, 0.33, 0.33, 1]);
+
+    const percentage = Math.max(0, playerHealth / playerMaxHealth);
+    let color = [0.3, 0.69, 0.31, 1];
+    if (percentage <= 0.25) {
+        color = [0.96, 0.26, 0.21, 1];
+    } else if (percentage <= 0.5) {
+        color = [1, 0.92, 0.23, 1];
+    }
+
+    if (percentage > 0) {
+        drawSprite(startX, startY, barWidth * percentage, barHeight, color);
+    }
+}
+
 async function loadShaderSource(path) {
     const response = await fetch(path);
 
@@ -200,6 +271,8 @@ function getBuildSlotAtPointer(event) {
 }
 
 canvas.addEventListener("click", (event) => {
+    if (isGameOver) return;
+
     const slot = getBuildSlotAtPointer(event);
 
     if (!slot || slot.occupied) {
@@ -351,6 +424,14 @@ function updateBandits(deltaTime) {
         }
 
         if (!bandit.alive || bandit.finished) {
+            if (bandit.alive && bandit.finished) {
+                playerHealth -= 10;
+                if (playerHealth <= 0) {
+                    playerHealth = 0;
+                    isGameOver = true;
+                    document.querySelector("#gameOverScreen").style.display = "flex";
+                }
+            }
             bandits.splice(index, 1);
         }
     }
@@ -499,9 +580,11 @@ function gameLoop(currentTime) {
         : Math.min((currentTime - previousTime) / 1000, 0.1);
     previousTime = currentTime;
 
-    updateBandits(deltaTime);
-    updateSheriffs(deltaTime);
-    updateProjectiles(deltaTime);
+    if (!isGameOver) {
+        updateBandits(deltaTime);
+        updateSheriffs(deltaTime);
+        updateProjectiles(deltaTime);
+    }
 
     gl.clear(gl.COLOR_BUFFER_BIT);
     drawSprite(0, 0, canvas.width, canvas.height, [1, 1, 1, 1], backgroundTexture);
@@ -521,8 +604,29 @@ function gameLoop(currentTime) {
 
     drawProjectiles();
     drawBandits();
+    drawPlayerHealthBar();
 
     requestAnimationFrame(gameLoop);
 }
 
+function resetGame() {
+    playerHealth = playerMaxHealth;
+    isGameOver = false;
+    bandits.length = 0;
+    projectiles.length = 0;
+    sheriffs.length = 0;
+
+    for (const slot of buildSlots) {
+        slot.occupant = null;
+    }
+
+    selectedBuildSlot = null;
+    hoveredBuildSlot = null;
+    document.querySelector("#gameOverScreen").style.display = "none";
+    document.querySelector("#buildStatus").textContent = "Clique em um quadrado vazio para posicionar um xerife.";
+}
+
+document.querySelector("#restartButton").addEventListener("click", resetGame);
+
+initPlayerTextTexture();
 requestAnimationFrame(gameLoop);
