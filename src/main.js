@@ -12,8 +12,9 @@ if (!gl) {
     throw new Error("WebGL2 não está disponível neste navegador.");
 }
 
-let playerHealth = 100;
-const playerMaxHealth = 100;
+let bankMoney = 1000;
+const bankMaxMoney = 1000;
+const banditRobberyValue = 100;
 let isGameOver = false;
 
 let coins = 10;
@@ -126,14 +127,14 @@ function initBankTextTexture() {
     bankTextHeight = tempCanvas.height;
 }
 
-let playerTextTexture = null;
-let playerTextWidth = 0;
-let playerTextHeight = 0;
+let bankMoneyTextTexture = null;
+let bankMoneyTextWidth = 0;
+let bankMoneyTextHeight = 0;
 
-function initPlayerTextTexture() {
+function updateBankMoneyTextTexture() {
     const tempCanvas = document.createElement('canvas');
     const ctx = tempCanvas.getContext('2d');
-    const text = "Player";
+    const text = `Banco: $${bankMoney}`;
     ctx.font = "bold 20px Arial";
     tempCanvas.width = ctx.measureText(text).width + 8;
     tempCanvas.height = 24;
@@ -147,19 +148,23 @@ function initPlayerTextTexture() {
     ctx.shadowOffsetY = 1;
     ctx.fillText(text, 2, 2);
 
-    playerTextTexture = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, playerTextTexture);
+    if (bankMoneyTextTexture) {
+        gl.deleteTexture(bankMoneyTextTexture);
+    }
+
+    bankMoneyTextTexture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, bankMoneyTextTexture);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, tempCanvas);
 
-    playerTextWidth = tempCanvas.width;
-    playerTextHeight = tempCanvas.height;
+    bankMoneyTextWidth = tempCanvas.width;
+    bankMoneyTextHeight = tempCanvas.height;
 }
 
-function drawPlayerHealthBar() {
+function drawBankMoneyBar() {
     const barWidth = 150;
     const barHeight = 20;
     const padding = 15;
@@ -167,8 +172,8 @@ function drawPlayerHealthBar() {
     const startX = canvas.width - barWidth - padding;
     const startY = padding;
 
-    if (playerTextTexture) {
-        drawSprite(startX - playerTextWidth - gap, startY, playerTextWidth, playerTextHeight, [1, 1, 1, 1], playerTextTexture);
+    if (bankMoneyTextTexture) {
+        drawSprite(startX - bankMoneyTextWidth - gap, startY, bankMoneyTextWidth, bankMoneyTextHeight, [1, 1, 1, 1], bankMoneyTextTexture);
     }
 
     const borderThickness = 3;
@@ -180,7 +185,7 @@ function drawPlayerHealthBar() {
 
     drawSprite(startX, startY, barWidth, barHeight, [0.33, 0.33, 0.33, 1]);
 
-    const percentage = Math.max(0, playerHealth / playerMaxHealth);
+    const percentage = Math.max(0, bankMoney / bankMaxMoney);
     let color = [0.3, 0.69, 0.31, 1];
     if (percentage <= 0.25) {
         color = [0.96, 0.26, 0.21, 1];
@@ -585,12 +590,13 @@ function updateBandits(deltaTime) {
 
         if (!bandit.alive || bandit.finished) {
             if (bandit.alive && bandit.finished) {
-                playerHealth -= 10;
-                if (playerHealth <= 0) {
-                    playerHealth = 0;
+                bankMoney -= banditRobberyValue;
+                if (bankMoney <= 0) {
+                    bankMoney = 0;
                     isGameOver = true;
                     document.querySelector("#gameOverScreen").style.display = "flex";
                 }
+                updateBankMoneyTextTexture();
             }
             bandits.splice(index, 1);
         }
@@ -795,7 +801,7 @@ function gameLoop(currentTime) {
 
     drawProjectiles();
     drawBandits();
-    drawPlayerHealthBar();
+    drawBankMoneyBar();
 
     if (coinsTextTexture) {
         drawSprite(20, 20, coinsTextWidth, coinsTextHeight, [1, 1, 1, 1], coinsTextTexture);
@@ -809,12 +815,13 @@ function gameLoop(currentTime) {
 }
 
 function resetGame() {
-    playerHealth = playerMaxHealth;
+    bankMoney = bankMaxMoney;
     isGameOver = false;
     coins = 10;
     score = 0;
     updateCoinsUI();
     updateScoreUI();
+    updateBankMoneyTextTexture();
     bandits.length = 0;
     projectiles.length = 0;
     sheriffs.length = 0;
@@ -835,7 +842,7 @@ function resetGame() {
 
 document.querySelector("#restartButton").addEventListener("click", resetGame);
 
-initPlayerTextTexture();
+updateBankMoneyTextTexture();
 initBankTextTexture();
 updateCoinsUI();
 updateScoreUI();
