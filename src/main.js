@@ -97,6 +97,35 @@ function updateScoreUI() {
     scoreTextHeight = tempCanvas.height;
 }
 
+let bankTextTexture = null;
+let bankTextWidth = 0;
+let bankTextHeight = 0;
+
+function initBankTextTexture() {
+    const tempCanvas = document.createElement("canvas");
+    const ctx = tempCanvas.getContext("2d");
+    const text = "BANCO";
+    ctx.font = "bold 22px Georgia";
+    tempCanvas.width = ctx.measureText(text).width + 8;
+    tempCanvas.height = 30;
+
+    ctx.font = "bold 22px Georgia";
+    ctx.fillStyle = "#f6dfa0";
+    ctx.textBaseline = "top";
+    ctx.fillText(text, 4, 2);
+
+    bankTextTexture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, bankTextTexture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, tempCanvas);
+
+    bankTextWidth = tempCanvas.width;
+    bankTextHeight = tempCanvas.height;
+}
+
 let playerTextTexture = null;
 let playerTextWidth = 0;
 let playerTextHeight = 0;
@@ -306,8 +335,15 @@ const pathWaypoints = [
     { x: 400, y: 470 },
     { x: 790, y: 470 },
     { x: 790, y: 240 },
-    { x: 990, y: 240 },
+    { x: 830, y: 240 },
 ];
+
+const bank = {
+    x: 780,
+    y: 100,
+    width: 180,
+    height: 175,
+};
 
 const buildSlots = [];
 
@@ -470,11 +506,12 @@ function drawPath(waypoints) {
     drawPathLayer(waypoints, 66, dirtColor);
 }
 
-const [backgroundTexture, banditTexture, sheriffTexture, deputyTexture] = await Promise.all([
+const [backgroundTexture, banditTexture, sheriffTexture, deputyTexture, bankTexture] = await Promise.all([
     loadTexture("assets/images/background.png"),
     loadTexture("assets/images/bandit.png"),
     loadTexture("assets/images/sheriff.png"),
     loadTexture("assets/images/deputy.png"),
+    loadTexture("assets/images/bank.png"),
 ]);
 
 const bandits = [];
@@ -716,6 +753,32 @@ function gameLoop(currentTime) {
     gl.clear(gl.COLOR_BUFFER_BIT);
     drawSprite(0, 0, canvas.width, canvas.height, [1, 1, 1, 1], backgroundTexture);
     drawPath(pathWaypoints);
+
+    drawSprite(
+        bank.x,
+        bank.y,
+        bank.width,
+        bank.height,
+        [1, 1, 1, 1],
+        bankTexture,
+    );
+
+    const bankSignWidth = bankTextWidth + 22;
+    const bankSignX = bank.x + (bank.width - bankSignWidth) / 2;
+    drawSprite(bankSignX - 3, 61, bankSignWidth + 6, 37, [0.25, 0.12, 0.04, 1]);
+    drawSprite(bankSignX, 64, bankSignWidth, 31, [0.48, 0.27, 0.09, 1]);
+
+    if (bankTextTexture) {
+        drawSprite(
+            bank.x + (bank.width - bankTextWidth) / 2,
+            65,
+            bankTextWidth,
+            bankTextHeight,
+            [1, 1, 1, 1],
+            bankTextTexture,
+        );
+    }
+
     drawBuildSlots();
 
     for (const sheriff of sheriffs) {
@@ -773,6 +836,7 @@ function resetGame() {
 document.querySelector("#restartButton").addEventListener("click", resetGame);
 
 initPlayerTextTexture();
+initBankTextTexture();
 updateCoinsUI();
 updateScoreUI();
 requestAnimationFrame(gameLoop);
