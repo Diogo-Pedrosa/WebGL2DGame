@@ -20,6 +20,8 @@ let coins = 10;
 const deputyCost = 2;
 const sheriffUpgradeCost = 3;
 const banditReward = 1;
+let score = 0;
+const banditScore = 100;
 
 let coinsTextTexture = null;
 let coinsTextWidth = 0;
@@ -56,6 +58,43 @@ function updateCoinsUI() {
 
     coinsTextWidth = tempCanvas.width;
     coinsTextHeight = tempCanvas.height;
+}
+
+let scoreTextTexture = null;
+let scoreTextWidth = 0;
+let scoreTextHeight = 0;
+
+function updateScoreUI() {
+    const tempCanvas = document.createElement("canvas");
+    const ctx = tempCanvas.getContext("2d");
+    const text = `Pontos: ${score}`;
+    ctx.font = "bold 28px Arial";
+    tempCanvas.width = ctx.measureText(text).width + 8;
+    tempCanvas.height = 36;
+
+    ctx.font = "bold 28px Arial";
+    ctx.fillStyle = "white";
+    ctx.textBaseline = "top";
+    ctx.shadowColor = "black";
+    ctx.shadowBlur = 3;
+    ctx.shadowOffsetX = 2;
+    ctx.shadowOffsetY = 2;
+    ctx.fillText(text, 4, 4);
+
+    if (scoreTextTexture) {
+        gl.deleteTexture(scoreTextTexture);
+    }
+
+    scoreTextTexture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, scoreTextTexture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, tempCanvas);
+
+    scoreTextWidth = tempCanvas.width;
+    scoreTextHeight = tempCanvas.height;
 }
 
 let playerTextTexture = null;
@@ -627,7 +666,9 @@ function updateProjectiles(deltaTime) {
                 target.health = 0;
                 target.alive = false;
                 coins += banditReward;
+                score += banditScore;
                 updateCoinsUI();
+                updateScoreUI();
             }
 
             continue;
@@ -697,6 +738,10 @@ function gameLoop(currentTime) {
         drawSprite(20, 20, coinsTextWidth, coinsTextHeight, [1, 1, 1, 1], coinsTextTexture);
     }
 
+    if (scoreTextTexture) {
+        drawSprite(20, 60, scoreTextWidth, scoreTextHeight, [1, 1, 1, 1], scoreTextTexture);
+    }
+
     requestAnimationFrame(gameLoop);
 }
 
@@ -704,7 +749,9 @@ function resetGame() {
     playerHealth = playerMaxHealth;
     isGameOver = false;
     coins = 10;
+    score = 0;
     updateCoinsUI();
+    updateScoreUI();
     bandits.length = 0;
     projectiles.length = 0;
     sheriffs.length = 0;
@@ -727,4 +774,5 @@ document.querySelector("#restartButton").addEventListener("click", resetGame);
 
 initPlayerTextTexture();
 updateCoinsUI();
+updateScoreUI();
 requestAnimationFrame(gameLoop);
