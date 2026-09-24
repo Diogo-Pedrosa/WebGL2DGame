@@ -16,13 +16,73 @@ let bankMoney = 1000;
 const bankMaxMoney = 1000;
 const banditRobberyValue = 100;
 let isGameOver = false;
+let isGamePaused = false;
+
+let globalDamageBonus = 0;
+let globalFireRateMultiplier = 1;
+let globalRangeBonus = 0;
+let clickDamage = 12.5;
+
+const drops = [];
+
+const possibleUpgrades = [
+    { title: "+ Dano", desc: "Aumenta o dano das torres em +2", cost: 15, apply: () => globalDamageBonus += 2 },
+    { title: "Tiro Rápido", desc: "Aumenta a cadência de tiro em +15%", cost: 15, apply: () => globalFireRateMultiplier *= 1.15 },
+    { title: "+ Alcance", desc: "Aumenta o alcance das torres em +25", cost: 10, apply: () => globalRangeBonus += 25 },
+    { title: "Dedo Nervoso", desc: "Dano de clique aumenta em +5", cost: 10, apply: () => clickDamage += 5 },
+    { title: "Curativo", desc: "Restaura +100 HP do Banco", cost: 20, apply: () => { bankMoney = Math.min(bankMaxMoney, bankMoney + 100); updateBankMoneyTextTexture(); } }
+];
+
+function openUpgradeScreen() {
+    isGamePaused = true;
+    const upgradeScreen = document.getElementById("upgradeScreen");
+    const cardsContainer = document.getElementById("upgradeCards");
+    cardsContainer.innerHTML = "";
+
+    const shuffled = [...possibleUpgrades].sort(() => 0.5 - Math.random());
+    const selected = shuffled.slice(0, 3);
+
+    for (const upgrade of selected) {
+        const card = document.createElement("div");
+        card.className = "upgrade-card";
+        if (coins < upgrade.cost) {
+            card.classList.add("disabled");
+        }
+
+        card.innerHTML = `<h3>${upgrade.title}</h3><p>${upgrade.desc}</p><span class="upgrade-price">Custo: ${upgrade.cost}</span>`;
+        card.onclick = () => {
+            if (coins >= upgrade.cost) {
+                coins -= upgrade.cost;
+                updateCoinsUI();
+                upgrade.apply();
+                upgradeScreen.style.display = "none";
+                isGamePaused = false;
+            }
+        };
+        cardsContainer.appendChild(card);
+    }
+
+    document.getElementById("skipUpgradeButton").onclick = () => {
+        upgradeScreen.style.display = "none";
+        isGamePaused = false;
+    };
+
+    upgradeScreen.style.display = "flex";
+}
 
 let coins = 10;
 const deputyCost = 2;
 const sheriffUpgradeCost = 3;
 const banditReward = 1;
 let score = 0;
+let lastScoreDifficulty = 0;
 const banditScore = 100;
+
+let currentHorde = 1;
+let banditsToSpawn = 5;
+let banditsSpawned = 0;
+let hordeDelayTimer = 0;
+let banditBaseSpeed = 70;
 
 let coinsTextTexture = null;
 let coinsTextWidth = 0;
@@ -68,7 +128,7 @@ let scoreTextHeight = 0;
 function updateScoreUI() {
     const tempCanvas = document.createElement("canvas");
     const ctx = tempCanvas.getContext("2d");
-    const text = `Pontos: ${score}`;
+    const text = `Pontos: ${score}  |  Horda: ${currentHorde}`;
     ctx.font = "bold 28px Arial";
     tempCanvas.width = ctx.measureText(text).width + 8;
     tempCanvas.height = 36;
@@ -417,18 +477,18 @@ function createDeputy(slot) {
         y: slot.y + slot.size,
         width: 48,
         height: 74,
-        range: 250,
-        damage: 13,
-        fireRate: 0.8,
+        baseRange: 250,
+        baseDamage: 13,
+        baseFireRate: 0.8,
         timeSinceLastShot: 0,
     };
 }
 
 function upgradeToSheriff(tower) {
     tower.type = 'sheriff';
-    tower.range = 250;
-    tower.damage = 13;
-    tower.fireRate = 1.4;
+    tower.baseRange = 250;
+    tower.baseDamage = 13;
+    tower.baseFireRate = 1.4;
 }
 
 function getBuildSlotAtPointer(event) {
@@ -441,8 +501,71 @@ function getBuildSlotAtPointer(event) {
     return buildSlots.find((slot) => slot.containsPoint(x, y)) ?? null;
 }
 
+function getDropAtPointer(event) {
+    const bounds = canvas.getBoundingClientRect();
+    const x = (event.clientX - bounds.left - canvas.clientLeft) * canvas.width / canvas.clientWidth;
+    const y = (event.clientY - bounds.top - canvas.clientTop) * canvas.height / canvas.clientHeight;
+
+    for (let i = drops.length - 1; i >= 0; i--) {
+        const drop = drops[i];
+        if (x >= drop.x - drop.width / 2 && x <= drop.x + drop.width / 2 &&
+            y >= drop.y - drop.height / 2 && y <= drop.y + drop.height / 2) {
+            return { drop, index: i };
+        }
+    }
+    return null;
+}
+
+function getBanditAtPointer(event) {
+    const bounds = canvas.getBoundingClientRect();
+    const x = (event.clientX - bounds.left - canvas.clientLeft)
+        * canvas.width / canvas.clientWidth;
+    const y = (event.clientY - bounds.top - canvas.clientTop)
+        * canvas.height / canvas.clientHeight;
+
+    for (let i = bandits.length - 1; i >= 0; i--) {
+        const bandit = bandits[i];
+        if (!bandit.alive || bandit.finished) continue;
+
+        let width = bandit.width;
+        let height = bandit.height;
+        width = height * 0.8;
+
+        const left = bandit.x - width / 2;
+        const right = bandit.x + width / 2;
+        const top = bandit.y - height;
+        const bottom = bandit.y;
+
+        if (x >= left && x <= right && y >= top && y <= bottom) {
+            return bandit;
+        }
+    }
+    return null;
+}
+
 canvas.addEventListener("click", (event) => {
-    if (isGameOver) return;
+    if (isGameOver || isGamePaused) return;
+
+    const clickedDrop = getDropAtPointer(event);
+    if (clickedDrop) {
+        drops.splice(clickedDrop.index, 1);
+        openUpgradeScreen();
+        return;
+    }
+
+    const clickedBandit = getBanditAtPointer(event);
+    if (clickedBandit) {
+        clickedBandit.health -= clickDamage; // Dano do clique com suporte a upgrades
+        if (clickedBandit.health <= 0) {
+            clickedBandit.health = 0;
+            clickedBandit.alive = false;
+            coins += banditReward;
+            score += banditScore;
+            updateCoinsUI();
+            updateScoreUI();
+        }
+        return;
+    }
 
     const slot = getBuildSlotAtPointer(event);
     const statusText = document.querySelector("#buildStatus");
@@ -486,9 +609,15 @@ canvas.addEventListener("click", (event) => {
 });
 
 canvas.addEventListener("mousemove", (event) => {
+    if (isGamePaused) {
+        canvas.style.cursor = "default";
+        return;
+    }
     const slot = getBuildSlotAtPointer(event);
+    const bandit = getBanditAtPointer(event);
+    const drop = getDropAtPointer(event);
     hoveredBuildSlot = slot && !slot.occupied ? slot : null;
-    canvas.style.cursor = hoveredBuildSlot ? "pointer" : "default";
+    canvas.style.cursor = (hoveredBuildSlot || bandit || drop) ? "pointer" : "default";
 });
 
 canvas.addEventListener("mouseleave", () => {
@@ -660,7 +789,6 @@ const bandits = [];
 let banditSpawnInterval = 2.5;
 let banditSpawnTimer = banditSpawnInterval;
 let banditBaseHealth = 100;
-let difficultyTimer = 0;
 
 function createBandit() {
     let initialAngle = 0;
@@ -672,7 +800,7 @@ function createBandit() {
         y: pathWaypoints[0].y,
         width: 43,
         height: 72,
-        speed: 70,
+        speed: banditBaseSpeed,
         nextWaypoint: 1,
         health: banditBaseHealth,
         maxHealth: banditBaseHealth,
@@ -740,18 +868,35 @@ function updateBandit(bandit, deltaTime) {
 }
 
 function updateBandits(deltaTime) {
-    difficultyTimer += deltaTime;
-    while (difficultyTimer >= 5) {
-        difficultyTimer -= 5;
-        banditSpawnInterval = Math.max(1.5, banditSpawnInterval - 0.1);
-        banditBaseHealth = Math.min(200, banditBaseHealth + 10);
+    while (score - lastScoreDifficulty >= 2000) {
+        lastScoreDifficulty += 2000;
+        // Escalonamento extra por pontuação
+        banditSpawnInterval = Math.max(0.3, banditSpawnInterval - 0.1);
     }
 
-    banditSpawnTimer += deltaTime;
-
-    while (banditSpawnTimer >= banditSpawnInterval) {
-        bandits.push(createBandit());
-        banditSpawnTimer -= banditSpawnInterval;
+    if (banditsSpawned < banditsToSpawn) {
+        banditSpawnTimer += deltaTime;
+        while (banditSpawnTimer >= banditSpawnInterval && banditsSpawned < banditsToSpawn) {
+            bandits.push(createBandit());
+            banditsSpawned++;
+            banditSpawnTimer -= banditSpawnInterval;
+        }
+    } else if (bandits.length === 0) {
+        hordeDelayTimer -= deltaTime;
+        if (hordeDelayTimer <= 0) {
+            currentHorde++;
+            banditsToSpawn = 4 + currentHorde; // Horda 1 = 5, Horda 2 = 6, Horda 3 = 7...
+            banditsSpawned = 0;
+            hordeDelayTimer = 3; // 3 segundos de descanso
+            banditSpawnTimer = banditSpawnInterval;
+            
+            // Aumento de dificuldade por horda
+            banditBaseSpeed = Math.min(150, banditBaseSpeed + 5); 
+            banditSpawnInterval = Math.max(0.5, banditSpawnInterval - 0.1); 
+            banditBaseHealth = Math.min(400, banditBaseHealth + 10);
+            
+            updateScoreUI();
+        }
     }
 
     for (let index = bandits.length - 1; index >= 0; index -= 1) {
@@ -770,6 +915,10 @@ function updateBandits(deltaTime) {
                     document.querySelector("#gameOverScreen").style.display = "flex";
                 }
                 updateBankMoneyTextTexture();
+            } else if (!bandit.alive) {
+                if (Math.random() <= 0.05) {
+                    drops.push({ x: bandit.x, y: bandit.y - bandit.height / 2, width: 35, height: 35, pulse: 0 });
+                }
             }
             bandits.splice(index, 1);
         }
@@ -825,9 +974,9 @@ function getBanditCenter(bandit) {
     };
 }
 
-function findClosestBandit(sheriff) {
+function findClosestBandit(sheriff, currentRange) {
     let closestBandit = null;
-    let closestDistance = sheriff.range;
+    let closestDistance = currentRange;
 
     for (const bandit of bandits) {
         if (!bandit.alive || bandit.finished) {
@@ -852,7 +1001,7 @@ function createProjectile(sheriff, target) {
         y: sheriff.y - sheriff.height / 2,
         size: 9,
         speed: 300,
-        damage: sheriff.damage,
+        damage: sheriff.baseDamage + globalDamageBonus,
         target,
         angle: 0,
     });
@@ -861,8 +1010,11 @@ function createProjectile(sheriff, target) {
 function updateSheriffs(deltaTime) {
     for (const sheriff of sheriffs) {
         sheriff.timeSinceLastShot += deltaTime;
-        const target = findClosestBandit(sheriff);
-        const shootingInterval = 1 / sheriff.fireRate;
+        const currentRange = sheriff.baseRange + globalRangeBonus;
+        const currentFireRate = sheriff.baseFireRate * globalFireRateMultiplier;
+
+        const target = findClosestBandit(sheriff, currentRange);
+        const shootingInterval = 1 / currentFireRate;
 
         if (target && sheriff.timeSinceLastShot >= shootingInterval) {
             createProjectile(sheriff, target);
@@ -942,16 +1094,45 @@ gl.clearColor(0.79, 0.55, 0.29, 1.0);
 
 let previousTime = null;
 
+function drawDrops() {
+    for (const drop of drops) {
+        const pulseScale = 1 + Math.sin(drop.pulse) * 0.15;
+        drawSprite(
+            drop.x - (drop.width * pulseScale) / 2,
+            drop.y - (drop.height * pulseScale) / 2,
+            drop.width * pulseScale,
+            drop.height * pulseScale,
+            [0.1, 0.9, 0.2, 1], // Verde neon
+            null,
+            drop.pulse * 0.5, // Rotação da caixa verde
+            false
+        );
+        drawSprite(
+            drop.x - (drop.width * pulseScale * 0.5) / 2,
+            drop.y - (drop.height * pulseScale * 0.5) / 2,
+            drop.width * pulseScale * 0.5,
+            drop.height * pulseScale * 0.5,
+            [1, 0.9, 0.1, 1], // Estrela amarela interna
+            null,
+            -drop.pulse * 0.5,
+            false
+        );
+    }
+}
+
 function gameLoop(currentTime) {
     const deltaTime = previousTime === null
         ? 0
         : Math.min((currentTime - previousTime) / 1000, 0.1);
     previousTime = currentTime;
 
-    if (!isGameOver) {
+    if (!isGameOver && !isGamePaused) {
         updateBandits(deltaTime);
         updateSheriffs(deltaTime);
         updateProjectiles(deltaTime);
+        for (const drop of drops) {
+            drop.pulse += deltaTime * 5;
+        }
     }
 
     gl.clear(gl.COLOR_BUFFER_BIT);
@@ -999,6 +1180,7 @@ function gameLoop(currentTime) {
 
     drawProjectiles();
     drawBandits();
+    drawDrops();
     drawBankMoneyBar();
 
     if (coinsTextTexture) {
@@ -1023,10 +1205,25 @@ function resetGame() {
     bandits.length = 0;
     projectiles.length = 0;
     sheriffs.length = 0;
+    drops.length = 0;
+
+    globalDamageBonus = 0;
+    globalFireRateMultiplier = 1;
+    globalRangeBonus = 0;
+    clickDamage = 12.5;
+    isGamePaused = false;
+    document.getElementById("upgradeScreen").style.display = "none";
+
     banditSpawnInterval = 2.5;
     banditBaseHealth = 100;
-    difficultyTimer = 0;
+    banditBaseSpeed = 70;
     banditSpawnTimer = banditSpawnInterval;
+    lastScoreDifficulty = 0;
+
+    currentHorde = 1;
+    banditsToSpawn = 5;
+    banditsSpawned = 0;
+    hordeDelayTimer = 0;
 
     for (const slot of buildSlots) {
         slot.occupant = null;
