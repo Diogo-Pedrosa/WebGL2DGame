@@ -614,6 +614,7 @@ const [
     sheriffTexture,
     deputyTexture,
     bankTexture,
+    bulletTexture,
 ] = await Promise.all([
     loadTexture("assets/images/background.png"),
     loadTexture("assets/images/bandit/center east.png"),
@@ -634,6 +635,7 @@ const [
     loadTexture("assets/images/sheriff.png"),
     loadTexture("assets/images/deputy.png"),
     loadTexture("assets/images/bank.png"),
+    loadTexture("assets/images/bullet.png"),
 ]);
 
 const banditTextures = {
@@ -852,6 +854,7 @@ function createProjectile(sheriff, target) {
         speed: 300,
         damage: sheriff.damage,
         target,
+        angle: 0,
     });
 }
 
@@ -882,6 +885,9 @@ function updateProjectiles(deltaTime) {
         const deltaX = targetCenter.x - projectile.x;
         const deltaY = targetCenter.y - projectile.y;
         const distance = Math.hypot(deltaX, deltaY);
+
+        projectile.angle = Math.atan2(deltaY, deltaX);
+
         const movement = projectile.speed * deltaTime;
         const targetRadius = Math.min(target.width, target.height) * 0.25;
 
@@ -908,15 +914,23 @@ function updateProjectiles(deltaTime) {
 
 function drawProjectiles() {
     for (const projectile of projectiles) {
+        let drawWidth = 30;
+        let drawHeight = 15;
+
+        if (bulletTexture && bulletTexture.width && bulletTexture.height) {
+            drawHeight = 15;
+            drawWidth = drawHeight * (bulletTexture.width / bulletTexture.height);
+        }
+
         drawSprite(
-            projectile.x - projectile.size / 2,
-            projectile.y - projectile.size / 2,
-            projectile.size,
-            projectile.size,
-            [1, 0.78, 0.15, 1],
-            null,
-            0,
-            true,
+            projectile.x - drawWidth / 2,
+            projectile.y - drawHeight / 2,
+            drawWidth,
+            drawHeight,
+            [1, 1, 1, 1],
+            bulletTexture,
+            projectile.angle,
+            false,
         );
     }
 }
