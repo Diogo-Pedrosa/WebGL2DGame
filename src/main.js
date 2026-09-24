@@ -295,6 +295,47 @@ function loadTexture(path) {
                 gl.UNSIGNED_BYTE,
                 image,
             );
+            texture.width = image.width;
+            texture.height = image.height;
+            resolve(texture);
+        });
+
+        image.addEventListener("error", () => {
+            reject(new Error(`Não foi possível carregar a imagem: ${path}`));
+        });
+
+        image.src = path;
+    });
+}
+
+function loadFlippedTexture(path) {
+    return new Promise((resolve, reject) => {
+        const image = new Image();
+
+        image.addEventListener("load", () => {
+            const canvas = document.createElement("canvas");
+            canvas.width = image.width;
+            canvas.height = image.height;
+            const ctx = canvas.getContext("2d");
+            ctx.scale(-1, 1);
+            ctx.drawImage(image, -image.width, 0);
+
+            const texture = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texImage2D(
+                gl.TEXTURE_2D,
+                0,
+                gl.RGBA,
+                gl.RGBA,
+                gl.UNSIGNED_BYTE,
+                canvas,
+            );
+            texture.width = image.width;
+            texture.height = image.height;
             resolve(texture);
         });
 
@@ -504,20 +545,114 @@ function drawPathLayer(waypoints, width, color) {
 }
 
 function drawPath(waypoints) {
-    const borderColor = [0.29, 0.16, 0.08, 1];
-    const dirtColor = [0.68, 0.43, 0.2, 1];
+    const shadowColor = [0.20, 0.10, 0.05, 1];
+    const borderColor = [0.35, 0.20, 0.10, 1];
+    const darkDirtColor = [0.60, 0.38, 0.18, 1];
+    const dirtColor = [0.75, 0.50, 0.25, 1];
+    const lightDirtColor = [0.82, 0.58, 0.32, 1];
 
+    drawPathLayer(waypoints, 90, shadowColor);
     drawPathLayer(waypoints, 82, borderColor);
+    drawPathLayer(waypoints, 74, darkDirtColor);
     drawPathLayer(waypoints, 66, dirtColor);
+    drawPathLayer(waypoints, 46, lightDirtColor);
+
+    for (let index = 0; index < waypoints.length - 1; index += 1) {
+        const start = waypoints[index];
+        const end = waypoints[index + 1];
+        const deltaX = end.x - start.x;
+        const deltaY = end.y - start.y;
+        const length = Math.hypot(deltaX, deltaY);
+        const angle = Math.atan2(deltaY, deltaX);
+
+        for (let d = 20; d < length; d += 25) {
+            const x = start.x + (deltaX / length) * d;
+            const y = start.y + (deltaY / length) * d;
+
+            const hash = Math.sin((d + index * 100) * 12.345) * 10000;
+            const random1 = hash - Math.floor(hash);
+            const random2 = (hash * 13.5) - Math.floor(hash * 13.5);
+
+            const offsetDist = (random1 - 0.5) * 45;
+            const offsetX = -Math.sin(angle) * offsetDist;
+            const offsetY = Math.cos(angle) * offsetDist;
+
+            const size = 3 + random2 * 6;
+            const detailColor = random1 > 0.5 ? [0.45, 0.28, 0.15, 1] : [0.88, 0.65, 0.38, 1];
+
+            drawSprite(
+                x + offsetX - size / 2,
+                y + offsetY - size / 2,
+                size,
+                size,
+                detailColor,
+                null,
+                random1 * Math.PI * 2,
+                random2 > 0.5
+            );
+        }
+    }
 }
 
-const [backgroundTexture, banditTexture, sheriffTexture, deputyTexture, bankTexture] = await Promise.all([
+const [
+    backgroundTexture,
+    banditCenterEastTexture,
+    banditLeftEastTexture,
+    banditRightEastTexture,
+    banditNorthEastTexture,
+    banditNorthWestTexture,
+    banditNorthTexture,
+    banditNorthLeftTexture,
+    banditNorthRightTexture,
+    banditSouthTexture,
+    banditSouthCenterTexture,
+    banditSouthLeftTexture,
+    banditSouthRightTexture,
+    banditCenterWestTexture,
+    banditLeftWestTexture,
+    banditRightWestTexture,
+    sheriffTexture,
+    deputyTexture,
+    bankTexture,
+] = await Promise.all([
     loadTexture("assets/images/background.png"),
-    loadTexture("assets/images/bandit.png"),
+    loadTexture("assets/images/bandit/center east.png"),
+    loadTexture("assets/images/bandit/left east.png"),
+    loadTexture("assets/images/bandit/right east.png"),
+    loadTexture("assets/images/bandit/north east.png"),
+    loadTexture("assets/images/bandit/north west.png"),
+    loadTexture("assets/images/bandit/north.png"),
+    loadTexture("assets/images/bandit/north left.png"),
+    loadTexture("assets/images/bandit/north right.png"),
+    loadTexture("assets/images/bandit/south.png"),
+    loadTexture("assets/images/bandit/south center.png"),
+    loadTexture("assets/images/bandit/south left.png"),
+    loadTexture("assets/images/bandit/south right.png"),
+    loadFlippedTexture("assets/images/bandit/center east.png"),
+    loadFlippedTexture("assets/images/bandit/right east.png"),
+    loadFlippedTexture("assets/images/bandit/left east.png"),
     loadTexture("assets/images/sheriff.png"),
     loadTexture("assets/images/deputy.png"),
     loadTexture("assets/images/bank.png"),
 ]);
+
+const banditTextures = {
+    "east": [banditCenterEastTexture, banditRightEastTexture, banditCenterEastTexture, banditLeftEastTexture],
+    "north east": banditNorthEastTexture,
+    "north west": banditNorthWestTexture,
+    "north": [banditNorthTexture, banditNorthRightTexture, banditNorthTexture, banditNorthLeftTexture],
+    "south": [banditSouthCenterTexture, banditSouthRightTexture, banditSouthCenterTexture, banditSouthLeftTexture],
+    "west": [banditCenterWestTexture, banditRightWestTexture, banditCenterWestTexture, banditLeftWestTexture],
+};
+
+const availableDirections = [
+    { name: "east", angle: 0 },
+    { name: "north east", angle: -Math.PI / 4 },
+    { name: "north", angle: -Math.PI / 2 },
+    { name: "north west", angle: -3 * Math.PI / 4 },
+    { name: "west", angle: Math.PI },
+    { name: "south", angle: Math.PI / 2 },
+];
 
 const bandits = [];
 let banditSpawnInterval = 2.5;
@@ -526,28 +661,64 @@ let banditBaseHealth = 100;
 let difficultyTimer = 0;
 
 function createBandit() {
+    let initialAngle = 0;
+    if (pathWaypoints.length > 1) {
+        initialAngle = Math.atan2(pathWaypoints[1].y - pathWaypoints[0].y, pathWaypoints[1].x - pathWaypoints[0].x);
+    }
     return {
         x: pathWaypoints[0].x,
         y: pathWaypoints[0].y,
-        width: 68,
-        height: 105,
+        width: 43,
+        height: 72,
         speed: 70,
         nextWaypoint: 1,
         health: banditBaseHealth,
         maxHealth: banditBaseHealth,
         alive: true,
         finished: false,
+        direction: "east",
+        angle: initialAngle,
+        animationTimer: 0,
     };
 }
 
 function updateBandit(bandit, deltaTime) {
     let movement = bandit.speed * deltaTime;
+    bandit.animationTimer += deltaTime;
 
     while (movement > 0 && bandit.nextWaypoint < pathWaypoints.length) {
         const target = pathWaypoints[bandit.nextWaypoint];
         const deltaX = target.x - bandit.x;
         const deltaY = target.y - bandit.y;
         const distance = Math.hypot(deltaX, deltaY);
+
+        if (distance > 0) {
+            let targetAngle = Math.atan2(deltaY, deltaX);
+            let diff = targetAngle - bandit.angle;
+
+            while (diff < -Math.PI) diff += 2 * Math.PI;
+            while (diff > Math.PI) diff -= 2 * Math.PI;
+
+            let turnSpeed = 8 * deltaTime;
+            if (Math.abs(diff) <= turnSpeed) {
+                bandit.angle = targetAngle;
+            } else {
+                bandit.angle += Math.sign(diff) * turnSpeed;
+            }
+
+            while (bandit.angle < -Math.PI) bandit.angle += 2 * Math.PI;
+            while (bandit.angle > Math.PI) bandit.angle -= 2 * Math.PI;
+
+            let minDiff = Infinity;
+            for (const dir of availableDirections) {
+                let d = Math.abs(bandit.angle - dir.angle);
+                if (d > Math.PI) d = 2 * Math.PI - d;
+                if (d < minDiff) {
+                    minDiff = d;
+                    bandit.direction = dir.name;
+                }
+            }
+        }
 
         if (movement >= distance) {
             bandit.x = target.x;
@@ -620,13 +791,26 @@ function drawBandits() {
             continue;
         }
 
+        let texture = banditTextures[bandit.direction] || banditTextures["east"];
+        if (Array.isArray(texture)) {
+            // Animação com duração de 0.15s por frame
+            const frameIndex = Math.floor(bandit.animationTimer / 0.15) % texture.length;
+            texture = texture[frameIndex];
+        }
+
+        let drawWidth = bandit.width;
+        let drawHeight = bandit.height;
+        if (texture.width && texture.height) {
+            drawWidth = bandit.height * (texture.width / texture.height);
+        }
+
         drawSprite(
-            bandit.x - bandit.width / 2,
-            bandit.y - bandit.height,
-            bandit.width,
-            bandit.height,
+            bandit.x - drawWidth / 2,
+            bandit.y - drawHeight,
+            drawWidth,
+            drawHeight,
             [1, 1, 1, 1],
-            banditTexture,
+            texture
         );
         drawBanditHealthBar(bandit);
     }
