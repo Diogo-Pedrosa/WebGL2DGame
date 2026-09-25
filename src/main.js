@@ -21,9 +21,99 @@ let isGamePaused = false;
 let globalDamageBonus = 0;
 let globalFireRateMultiplier = 1;
 let globalRangeBonus = 0;
-let clickDamage = 12.5;
+let clickDamage = 5;
 
 const drops = [];
+
+const backgroundMusic = {
+    context: null,
+    gainNode: null,
+    intervalId: null,
+    started: false,
+    pattern: [220, 277, 330, 392, 330, 277, 220, 196],
+    fileAudio: new Audio("assets/sounds/nickpanek-old-west-reimagined-219386.mp3"),
+};
+
+backgroundMusic.fileAudio.loop = true;
+backgroundMusic.fileAudio.volume = 0.55;
+backgroundMusic.fileAudio.preload = "auto";
+
+function playBackgroundNote(frequency, duration = 0.18, type = "triangle") {
+    if (!backgroundMusic.context || !backgroundMusic.gainNode) {
+        return;
+    }
+
+    const oscillator = backgroundMusic.context.createOscillator();
+    const gain = backgroundMusic.context.createGain();
+
+    oscillator.type = type;
+    oscillator.frequency.value = frequency;
+
+    gain.gain.setValueAtTime(0.0001, backgroundMusic.context.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.18, backgroundMusic.context.currentTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, backgroundMusic.context.currentTime + duration);
+
+    oscillator.connect(gain);
+    gain.connect(backgroundMusic.gainNode);
+
+    oscillator.start();
+    oscillator.stop(backgroundMusic.context.currentTime + duration);
+}
+
+function startBackgroundMusic() {
+    if (backgroundMusic.started) {
+        return;
+    }
+
+    backgroundMusic.started = true;
+
+    const playRealMusic = async () => {
+        try {
+            backgroundMusic.fileAudio.currentTime = 0;
+            await backgroundMusic.fileAudio.play();
+            return true;
+        } catch (error) {
+            return false;
+        }
+    };
+
+    playRealMusic().then((usedFile) => {
+        if (usedFile) {
+            return;
+        }
+
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) {
+            return;
+        }
+
+        backgroundMusic.context = new AudioContextClass();
+        backgroundMusic.gainNode = backgroundMusic.context.createGain();
+        backgroundMusic.gainNode.gain.value = 0.35;
+        backgroundMusic.gainNode.connect(backgroundMusic.context.destination);
+
+        let step = 0;
+
+        backgroundMusic.intervalId = window.setInterval(() => {
+            if (!backgroundMusic.context) {
+                return;
+            }
+
+            const note = backgroundMusic.pattern[step % backgroundMusic.pattern.length];
+            playBackgroundNote(note, 0.18, "triangle");
+
+            if (step % 2 === 0) {
+                playBackgroundNote(note / 2, 0.12, "sine");
+            }
+
+            step += 1;
+        }, 260);
+
+        if (backgroundMusic.context.state === "suspended") {
+            backgroundMusic.context.resume();
+        }
+    });
+}
 
 const possibleUpgrades = [
     { title: "+ Dano", desc: "Aumenta o dano das torres em +2", cost: 15, apply: () => globalDamageBonus += 2 },
@@ -543,7 +633,10 @@ function getBanditAtPointer(event) {
     return null;
 }
 
+document.addEventListener("pointerdown", startBackgroundMusic, { once: true });
+
 canvas.addEventListener("click", (event) => {
+    startBackgroundMusic();
     if (isGameOver || isGamePaused) return;
 
     const clickedDrop = getDropAtPointer(event);
@@ -1210,7 +1303,7 @@ function resetGame() {
     globalDamageBonus = 0;
     globalFireRateMultiplier = 1;
     globalRangeBonus = 0;
-    clickDamage = 12.5;
+    clickDamage = 5;
     isGamePaused = false;
     document.getElementById("upgradeScreen").style.display = "none";
 
