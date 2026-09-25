@@ -1,4 +1,4 @@
-# WebGL2DGame
+# Primeiro Jogo de TowerDefense via javascript e webgl
 
 ## O Jogo
 
