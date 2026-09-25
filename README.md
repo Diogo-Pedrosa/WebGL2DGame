@@ -14,6 +14,15 @@ O jogo usa WebGL2 com canvas 2D, texturas e um visual bem simples, mas funcional
 
 
 ## Media kit
+-Tela principal
+<img width="1337" height="822" alt="image" src="https://github.com/user-attachments/assets/3ef1dbdf-ec1d-42fb-a986-a40c46099da2" />
+
+-Sistema de Upgrades
+<img width="1191" height="798" alt="image" src="https://github.com/user-attachments/assets/7bc4f44d-f269-42c8-a156-b13ff04c48f0" />
+
+-Game Over
+<img width="1200" height="796" alt="image" src="https://github.com/user-attachments/assets/ae4e6fb7-bec6-4632-ae30-419e1ec5bd31" />
+
 
 
 ## Opcionais
@@ -38,6 +47,7 @@ Os itens abaixo são os que eu implementei no projeto:
 - Imagens e recursos visuais: produzidos e adaptados para o projeto
 - Texturas do jogo: criadas para uso dentro do ambiente WebGL com IA
 - Proposta base: trabalho prático TP1de Computação Gráfica da UTF
+- Video de base utilizado para confeccção do jogo (https://www.youtube.com/watch?v=C4_iRLlPNFc&t=5340s)
 
 
 ## Observação
