@@ -7,9 +7,36 @@ import {
 
 const canvas = document.querySelector("#gameCanvas");
 const gl = canvas.getContext("webgl2");
+const fullscreenButton = document.querySelector("#fullscreenButton");
 
 if (!gl) {
     throw new Error("WebGL2 não está disponível neste navegador.");
+}
+
+async function toggleFullscreen() {
+    if (!document.fullscreenElement) {
+        const element = document.documentElement;
+        const requestFullscreen = element.requestFullscreen
+            || element.webkitRequestFullscreen
+            || element.msRequestFullscreen;
+
+        if (requestFullscreen) {
+            await requestFullscreen.call(element);
+        }
+        return;
+    }
+
+    const exitFullscreen = document.exitFullscreen
+        || document.webkitExitFullscreen
+        || document.msExitFullscreen;
+
+    if (exitFullscreen) {
+        await exitFullscreen.call(document);
+    }
+}
+
+if (fullscreenButton) {
+    fullscreenButton.addEventListener("click", toggleFullscreen);
 }
 
 let bankMoney = 1000;

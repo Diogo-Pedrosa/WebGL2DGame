@@ -18,6 +18,32 @@ main {
     position: relative;
 }
 
+.top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+}
+
+.top-bar h1 {
+    margin: 0;
+}
+
+#fullscreenButton {
+    padding: 0.65rem 1rem;
+    border: 2px solid #d7b36a;
+    border-radius: 8px;
+    background: #3b2714;
+    color: #f7e7c2;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+#fullscreenButton:hover {
+    background: #4d311a;
+}
+
 #gameOverScreen {
     position: absolute;
     top: 0;
